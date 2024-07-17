@@ -1,0 +1,37 @@
+{
+  "type": "object",
+  "title": "Configuration",
+  "required": [
+    "app_id",
+    "table_id",
+    "column_name",
+    "token"
+  ],
+  "properties": {
+    "app_id": {
+      "type": "string",
+      "title": "App ID",
+      "minLength": 1,
+      "propertyOrder": 1
+    },
+    "table_id": {
+      "type": "string",
+      "title": "Table ID",
+      "minLength": 1,
+      "propertyOrder": 2
+    },
+    "column_name": {
+      "type": "string",
+      "title": "Column Name",
+      "minLength": 1,
+      "propertyOrder": 3
+    },
+    "token": {
+      "type": "string",
+      "title": "Token",
+      "format": "password",
+      "minLength": 1,
+      "propertyOrder": 4
+    }
+  }
+}

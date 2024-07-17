@@ -1,0 +1,81 @@
+variables:
+  APP_IMAGE: keboola-wr-airtable
+
+stages:
+  - prepare
+  - build
+  - deploy
+
+get:repo:
+  image:
+    name: oci.eag.guru/quay/keboola/developer-portal-cli-v2:latest
+    entrypoint: [""]
+  stage: prepare
+  script:
+    - /code/bin/cli ecr:get-repository ${KBC_DEVELOPERPORTAL_VENDOR} ${KBC_DEVELOPERPORTAL_APP} > kbc_repository
+    - /code/bin/cli ecr:get-login ${KBC_DEVELOPERPORTAL_VENDOR} ${KBC_DEVELOPERPORTAL_APP} > kbc_login_command
+    - cat kbc_login_command | awk '{print "REPOSITORY_USER="$4"\nREPOSITORY_PASSWORD="$6"\nREPOSITORY="$7}' > keboola.env
+    - echo -e "\nIMAGE=$(cat kbc_repository)" >> keboola.env
+    - source keboola.env
+    - sed -i '/^$/d;/^#/d' keboola.env
+  artifacts:
+    reports:
+      dotenv: keboola.env
+    name: kbc-developer-portal-credentials
+    paths:
+      - kbc_login_command
+      - kbc_repository
+      - keboola.env
+    expire_in: 15 minutes
+  only:
+    - tags
+
+build:image:
+  stage: build
+  image:
+    name: oci.eag.guru/docker-hub/cookielab/container-image-tools:1.5.0
+  needs:
+    - get:repo
+  dependencies:
+    - get:repo
+  script:
+    - set -x
+    - export REPOSITORY_UNDERSCORED=$(echo -n $REPOSITORY | sed 's/\./_/g;s/-/_/g')
+    - export DOCKER_${REPOSITORY_UNDERSCORED}_USR=AWS
+    - export DOCKER_${REPOSITORY_UNDERSCORED}_PSW=$REPOSITORY_PASSWORD
+    - |
+      kaniko --context . \
+        --dockerfile Dockerfile \
+        --destination "${IMAGE}:${CI_COMMIT_TAG}" \
+        --destination "${IMAGE}:latest" \
+        --single-snapshot
+  only:
+    - tags
+
+publish:version:
+  image:
+    name: oci.eag.guru/quay/keboola/developer-portal-cli-v2:latest
+    entrypoint: [""]
+  stage: deploy
+  needs:
+    - get:repo
+    - build:image
+  dependencies:
+    - get:repo
+  script:
+    - export REPOSITORY=$(cat kbc_repository)
+    - /code/bin/cli update-app-repository ${KBC_DEVELOPERPORTAL_VENDOR} ${KBC_DEVELOPERPORTAL_APP} ${CI_COMMIT_TAG} ecr ${REPOSITORY}
+  only:
+    - tags
+
+update:version:info:
+  image:
+    name: oci.eag.guru/quay/keboola/developer-portal-cli-v2:latest
+    entrypoint: [""]
+  stage: deploy
+  needs:
+    - publish:version
+  script:
+    - ./scripts/update_dev_portal_properties.sh
+  only:
+    - tags
